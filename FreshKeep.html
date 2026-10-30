@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FreshKeep</title>
+<style>
+:root{--bg:#f6f8f4;--card:#fff;--text:#1d2a1f;--muted:#6b7a6d;--line:#dfe6dc;--accent:#2f7d46;--accent-t:#fff;
+--bad:#c0392b;--bad-bg:#fbe7e4;--warn:#9a5b00;--warn-bg:#fdf0d8;--ok:#2f7d46;--ok-bg:#e3f2e7;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121a14;--card:#1b261e;--text:#e7efe8;--muted:#92a495;--line:#2c3b30;--accent:#5bbd78;--accent-t:#0e1a11;--bad:#ff8a7a;--bad-bg:#3a1f1c;--warn:#f0b955;--warn-bg:#3a2e15;--ok:#7fd096;--ok-bg:#1c3324}}
+:root[data-theme="dark"]{--bg:#121a14;--card:#1b261e;--text:#e7efe8;--muted:#92a495;--line:#2c3b30;--accent:#5bbd78;--accent-t:#0e1a11;--bad:#ff8a7a;--bad-bg:#3a1f1c;--warn:#f0b955;--warn-bg:#3a2e15;--ok:#7fd096;--ok-bg:#1c3324}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:24px 16px 48px}
+h1{margin:0 0 4px;font-size:28px}
+.sub{color:var(--muted);margin:0 0 20px}
+form{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+form .full{grid-column:1/-1}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+input{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+button{font:inherit;cursor:pointer}
+.add{grid-column:1/-1;padding:11px;border:0;border-radius:8px;background:var(--accent);color:var(--accent-t);font-weight:600}
+.sum{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 10px;font-size:14px;color:var(--muted)}
+ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+li{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.info{flex:1;min-width:0}
+.name{font-weight:600;overflow-wrap:anywhere}
+.meta{font-size:13px;color:var(--muted)}
+.badge{font-size:12px;font-weight:600;padding:4px 9px;border-radius:99px;white-space:nowrap}
+.bad{background:var(--bad-bg);color:var(--bad)}.warn{background:var(--warn-bg);color:var(--warn)}.ok{background:var(--ok-bg);color:var(--ok)}
+.del{border:0;background:none;color:var(--muted);font-size:20px;padding:4px 8px;border-radius:6px}
+.del:hover{color:var(--bad)}
+.empty{text-align:center;color:var(--muted);padding:32px 0}
+</style>
+</head>
+<body>
+<main>
+<h1>🥬 FreshKeep</h1>
+<p class="sub">Track what’s in your kitchen and use it before it expires.</p>
+<form id="f">
+  <div class="full"><label for="n">Ingredient</label><input id="n" required maxlength="60" placeholder="e.g. Spinach"></div>
+  <div><label for="q">Quantity (optional)</label><input id="q" maxlength="30" placeholder="e.g. 250 g"></div>
+  <div><label for="d">Expiry date</label><input id="d" type="date" required></div>
+  <button class="add" type="submit">Add ingredient</button>
+</form>
+<div class="sum" id="sum"></div>
+<ul id="list"></ul>
+</main>
+<script>
+const KEY="freshkeep:items";
+let items=[];
+try{items=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){items=[]}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(items))}catch(e){}}
+function midnight(s){const [y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)}
+function daysLeft(s){const t=new Date();t.setHours(0,0,0,0);return Math.round((midnight(s)-t)/864e5)}
+function status(n){
+  if(n<0)return["bad",n===-1?"Expired yesterday":"Expired "+(-n)+" days ago"];
+  if(n===0)return["bad","Expires today"];
+  if(n===1)return["warn","Tomorrow"];
+  if(n<=3)return["warn","In "+n+" days"];
+  return["ok","In "+n+" days"];
+}
+function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function render(){
+  items.sort((a,b)=>a.exp.localeCompare(b.exp)||a.name.localeCompare(b.name));
+  const list=document.getElementById("list");
+  const exp=items.filter(i=>daysLeft(i.exp)<0).length;
+  const soon=items.filter(i=>{const n=daysLeft(i.exp);return n>=0&&n<=3}).length;
+  document.getElementById("sum").innerHTML=items.length?`<span>${items.length} item${items.length>1?"s":""}</span><span>·</span><span>${soon} expiring soon</span><span>·</span><span>${exp} expired</span>`:"";
+  if(!items.length){list.innerHTML='<li class="empty" style="display:block">Nothing here yet. Add your first ingredient above.</li>';return}
+  list.innerHTML=items.map(i=>{
+    const [c,t]=status(daysLeft(i.exp));
+    const date=midnight(i.exp).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});
+    return `<li><div class="info"><div class="name">${esc(i.name)}</div><div class="meta">${i.qty?esc(i.qty)+" · ":""}${date}</div></div><span class="badge ${c}">${t}</span><button class="del" aria-label="Remove ${esc(i.name)}" data-id="${i.id}">×</button></li>`;
+  }).join("");
+}
+document.getElementById("f").addEventListener("submit",e=>{
+  e.preventDefault();
+  const n=document.getElementById("n"),q=document.getElementById("q"),d=document.getElementById("d");
+  items.push({id:Date.now()+Math.random().toString(36).slice(2,6),name:n.value.trim(),qty:q.value.trim(),exp:d.value});
+  save();render();n.value="";q.value="";n.focus();
+});
+document.getElementById("list").addEventListener("click",e=>{
+  const b=e.target.closest(".del");if(!b)return;
+  items=items.filter(i=>i.id!==b.dataset.id);save();render();
+});
+document.getElementById("d").valueAsDate=new Date();
+render();
+</script>
+</body>
+</html>
